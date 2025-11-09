@@ -1,156 +1,188 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Test Live v3.1 — Free Moderation</title>
-<style>
-:root{--yellow:#FFD600;--orange:#FFA000;--bg:#fffdf3}
-*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial;background:linear-gradient(180deg,var(--bg),#fff);color:#111}
-.topbar{height:64px;background:var(--yellow);display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-weight:800}
-.container{max-width:1100px;margin:12px auto;padding:8px}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.card{position:relative;border-radius:12px;overflow:hidden;background:#000;height:220px}
-.card img{width:100%;height:100%;object-fit:cover;display:block}
-.liveBadge{position:absolute;top:8px;left:8px;background:#d32f2f;color:#fff;padding:6px 8px;border-radius:999px;font-weight:800}
-.viewer{position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.9);padding:6px 8px;border-radius:12px;font-weight:700;color:#111}
-.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:var(--yellow);padding:12px 18px;border-radius:30px;font-weight:800;cursor:pointer}
-.bottomNav{position:fixed;left:0;right:0;bottom:0;height:64px;background:#fff;display:flex;justify-content:space-around;align-items:center;border-top:1px solid #f0f0f0}
-.fullscreen{position:fixed;inset:0;background:#000;display:flex;flex-direction:column;z-index:9999}
-.fulltop{height:56px;display:flex;justify-content:space-between;align-items:center;padding:8px 12px;color:#fff}
-.fullvideo{flex:1;display:flex;align-items:center;justify-content:center;position:relative}
-.fullvideo video{width:100%;height:100%;object-fit:cover}
-.controls{position:absolute;left:12px;bottom:12px;display:flex;gap:8px}
-.chatbtn{position:absolute;right:12px;bottom:12px;background:rgba(0,0,0,0.6);color:#fff;padding:10px 12px;border-radius:999px;border:none}
-.chatPanel{position:fixed;left:0;right:0;bottom:0;height:45%;background:#fff;border-top-left-radius:12px;border-top-right-radius:12px;box-shadow:0 -6px 20px rgba(0,0,0,0.12);transform:translateY(100%);transition:transform .28s}
-.chatPanel.open{transform:translateY(0)}
-.chatMessages{height:calc(100% - 60px);overflow:auto;padding:10px}
-.inputRow{display:flex;gap:8px;padding:8px}
-.inputRow input{flex:1;padding:10px;border-radius:10px;border:1px solid #eee}
-.small{font-size:13px;color:#666}
-@media(max-width:700px){ .grid{grid-template-columns:repeat(2,1fr)} .card{height:180px} }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Test Live — Go Live & Chat</title>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(120deg, #fff6b0, #ffd84d);
+      color: #222;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    .container {
+      width: 90%;
+      max-width: 420px;
+      margin: 40px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    h1 { color: #ffb300; }
+    input {
+      width: 90%;
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+    button {
+      width: 95%;
+      padding: 10px;
+      background: #ffcc00;
+      border: none;
+      color: #000;
+      font-weight: bold;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover { background: #ffdb4d; }
+    .link { margin-top: 10px; display: block; color: #0077ff; cursor: pointer; }
+    #dashboard {
+      display: none;
+      padding: 20px;
+    }
+    video {
+      width: 100%;
+      border-radius: 12px;
+      margin-top: 10px;
+      background: #000;
+    }
+    #chatbox {
+      background: #fff;
+      border-radius: 12px;
+      height: 150px;
+      overflow-y: auto;
+      text-align: left;
+      padding: 10px;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 <body>
-<div class="topbar"><div class="logo">TEST LIVE</div><div class="icons"></div></div>
-<div class="container">
-  <div class="grid" id="feed"></div>
-</div>
-<button class="fab" id="goLiveBtn">Go Live</button>
-<div class="bottomNav"><div>🏠</div><div>🔍</div><div>👑</div><div>💬</div><div>👤</div></div>
 
-<div id="fullscreen" class="hidden"></div>
-<div id="chatPanel" class="chatPanel">
-  <div class="chatMessages" id="chatMessages"></div>
-  <div class="inputRow"><input id="chatInput" placeholder="Say something..."><button id="sendChat">Send</button></div>
-</div>
+  <div id="authPage" class="container">
+    <h1>Test Live</h1>
+    <h3 id="authTitle">Create Account</h3>
 
-<script src="/socket.io/socket.io.js"></script>
-<script>
-// render a dummy feed
-const feedEl = document.getElementById('feed');
-for(let i=0;i<8;i++){
-  const card = document.createElement('div'); card.className='card';
-  const img = document.createElement('img'); img.src='https://picsum.photos/seed/'+(i+20)+'/600/400';
-  const live = document.createElement('div'); live.className='liveBadge'; live.innerText='LIVE';
-  const view = document.createElement('div'); view.className='viewer'; view.innerText=(Math.floor(Math.random()*5000)+10)+' viewers';
-  card.appendChild(img); card.appendChild(live); card.appendChild(view);
-  card.onclick = ()=> openViewerMock(i);
-  feedEl.appendChild(card);
-}
+    <input id="name" placeholder="Display Name" />
+    <input id="password" type="password" placeholder="Password" />
+    <input id="accessKey" placeholder="Admin Key (for signup)" />
 
-function openViewerMock(i){
-  const fs = document.getElementById('fullscreen');
-  fs.innerHTML = `
-    <div class="fullscreen">
-      <div class="fulltop"><div style="font-weight:800">Streamer_${i+1} • LIVE 🔴</div><div><button onclick="closeFull()">✖</button></div></div>
-      <div class="fullvideo"><video autoplay playsinline src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"></video>
-      <div class="controls"><button onclick="toggleChat()" class="chatbtn">💬</button></div></div>
+    <button id="signupBtn">Create Account</button>
+    <span class="link" id="toLogin">Already have an ID? Login</span>
+  </div>
+
+  <div id="loginPage" class="container" style="display:none;">
+    <h1>Login</h1>
+    <input id="userId" placeholder="Your User ID" />
+    <input id="loginPassword" type="password" placeholder="Password" />
+    <button id="loginBtn">Login</button>
+    <span class="link" id="toSignup">No account? Create One</span>
+  </div>
+
+  <div id="dashboard">
+    <h1>Welcome to Test Live</h1>
+    <button id="goLive">🎥 Go Live</button>
+    <div id="liveArea" style="display:none;">
+      <video id="liveVideo" autoplay muted></video>
+      <div id="chatbox"></div>
+      <input id="chatInput" placeholder="Type message..." />
+      <button id="sendBtn">Send</button>
     </div>
-  `;
-  fs.classList.remove('hidden');
-  document.getElementById('chatPanel').classList.add('open');
-}
-function closeFull(){ document.getElementById('fullscreen').classList.add('hidden'); document.getElementById('chatPanel').classList.remove('open'); }
+  </div>
 
-// Go Live flow: quick inline signup/login then camera fullscreen
-document.getElementById('goLiveBtn').onclick = async ()=>{
-  const token = localStorage.getItem('token');
-  if (!token){
-    const want = confirm('Create account (admin key required for signup)?');
-    if (!want) return;
-    const accessKey = prompt('Admin access key:');
-    const password = prompt('Choose a password (min 4 chars):');
-    const displayName = prompt('Display name (optional):');
-    try{
-      const r = await fetch('/api/signup',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({accessKey,password,displayName})});
-      const j = await r.json();
-      if (j.token){ localStorage.setItem('token', j.token); localStorage.setItem('id', j.id); alert('Created. Your ID: '+j.id); } else { alert(JSON.stringify(j)); return; }
-    }catch(e){ alert('signup failed'); return; }
-  }
-  startBroadcast();
-};
+  <script>
+    const apiBase = '/api';
+    let token = '';
+    let userId = '';
 
-let socket, pc, localStream;
-async function startBroadcast(){
-  try{
-    const token = localStorage.getItem('token');
-    if (!token) return alert('no token');
-    socket = io();
-    socket.on('connect', ()=> socket.emit('auth', token));
-    socket.on('auth-ok', ()=> console.log('auth ok'));
-    socket.on('public-signal', async data=>{
-      if (!pc) return;
-      if (data.sdp){ await pc.setRemoteDescription(new RTCSessionDescription(data.sdp)); if (data.sdp.type==='offer'){ const ans = await pc.createAnswer(); await pc.setLocalDescription(ans); socket.emit('public-signal',{ sdp: pc.localDescription }); } }
-      if (data.candidate){ try{ await pc.addIceCandidate(data.candidate); }catch(e){ console.warn(e); } }
-    });
-    localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
-    const fs = document.getElementById('fullscreen');
-    fs.innerHTML = `
-      <div class="fullscreen">
-        <div class="fulltop"><div style="font-weight:800">${localStorage.getItem('displayName')||'Me'} • LIVE 🔴</div><div><button onclick="endBroadcast()">End</button></div></div>
-        <div class="fullvideo"><video id="broad" autoplay playsinline muted></video><div class="controls"><button onclick="toggleChat()" class="chatbtn">💬</button></div></div>
-      </div>
-    `;
-    fs.classList.remove('hidden');
-    document.getElementById('broad').srcObject = localStream;
-    pc = new RTCPeerConnection();
-    localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
-    pc.onicecandidate = e=>{ if (e.candidate) socket.emit('public-signal', { candidate: e.candidate }); };
-    const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
-    socket.emit('public-signal', { sdp: pc.localDescription });
-    socket.emit('go-live', { id: localStorage.getItem('id') });
-    // moderation snapshots (send base64 to server)
-    window._modInt = setInterval(async ()=>{
-      try{
-        const canvas = document.createElement('canvas'); canvas.width=160; canvas.height=120;
-        const ctx = canvas.getContext('2d'); ctx.drawImage(document.getElementById('broad'),0,0,160,120);
-        const frame = canvas.toDataURL('image/jpeg').split(',')[1];
-        await fetch('/api/moderate-frame',{ method:'POST', headers:{ 'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('token') }, body: JSON.stringify({ frame }) });
-      }catch(e){ console.warn('mod err', e); }
-    },5000);
-  }catch(e){ alert('camera error '+e.message); }
-}
+    // Switch views
+    const authPage = document.getElementById('authPage');
+    const loginPage = document.getElementById('loginPage');
+    const dashboard = document.getElementById('dashboard');
+    const liveArea = document.getElementById('liveArea');
 
-function endBroadcast(){
-  if (window._modInt) clearInterval(window._modInt);
-  if (localStream) localStream.getTracks().forEach(t=>t.stop());
-  if (pc){ pc.close(); pc=null; }
-  document.getElementById('fullscreen').classList.add('hidden');
-  alert('Broadcast ended');
-  try{ socket.emit('stop-live'); }catch(e){}
-}
+    document.getElementById('toLogin').onclick = () => {
+      authPage.style.display = 'none';
+      loginPage.style.display = 'block';
+    };
+    document.getElementById('toSignup').onclick = () => {
+      loginPage.style.display = 'none';
+      authPage.style.display = 'block';
+    };
 
-// chat
-document.getElementById('sendChat').onclick = ()=>{
-  const txt = document.getElementById('chatInput').value;
-  if (!txt) return;
-  if (!socket) socket = io();
-  socket.emit('public-message', txt);
-  const d = document.createElement('div'); d.className='msg me'; d.innerText = 'You: '+txt; document.getElementById('chatMessages').appendChild(d);
-  document.getElementById('chatInput').value='';
-};
+    // Signup
+    document.getElementById('signupBtn').onclick = async () => {
+      const r = await fetch(`${apiBase}/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: document.getElementById('name').value,
+          password: document.getElementById('password').value,
+          accessKey: document.getElementById('accessKey').value
+        })
+      });
+      const data = await r.json();
+      if (data.id) {
+        alert(`Your User ID: ${data.id} — save it!`);
+        userId = data.id;
+        token = data.token;
+        authPage.style.display = 'none';
+        dashboard.style.display = 'block';
+      } else {
+        alert('Signup failed: ' + JSON.stringify(data));
+      }
+    };
 
-function toggleChat(){ document.getElementById('chatPanel').classList.toggle('open'); }
-</script>
+    // Login
+    document.getElementById('loginBtn').onclick = async () => {
+      const r = await fetch(`${apiBase}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: document.getElementById('userId').value,
+          password: document.getElementById('loginPassword').value
+        })
+      });
+      const data = await r.json();
+      if (data.token) {
+        token = data.token;
+        userId = data.id;
+        loginPage.style.display = 'none';
+        dashboard.style.display = 'block';
+      } else {
+        alert('Login failed: ' + JSON.stringify(data));
+      }
+    };
+
+    // Go Live
+    document.getElementById('goLive').onclick = async () => {
+      liveArea.style.display = 'block';
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      document.getElementById('liveVideo').srcObject = stream;
+      alert('You are live!');
+    };
+
+    // Chat (basic local)
+    document.getElementById('sendBtn').onclick = () => {
+      const msg = document.getElementById('chatInput').value;
+      if (!msg) return;
+      const chatbox = document.getElementById('chatbox');
+      const p = document.createElement('p');
+      p.textContent = `You: ${msg}`;
+      chatbox.appendChild(p);
+      document.getElementById('chatInput').value = '';
+    };
+  </script>
+
 </body>
 </html>
+
+      
