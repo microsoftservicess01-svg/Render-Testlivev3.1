@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test Live v3.1 — Free Moderation</title>
+<style>
+:root{--yellow:#FFD600;--orange:#FFA000;--bg:#fffdf3}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial;background:linear-gradient(180deg,var(--bg),#fff);color:#111}
+.topbar{height:64px;background:var(--yellow);display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-weight:800}
+.container{max-width:1100px;margin:12px auto;padding:8px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.card{position:relative;border-radius:12px;overflow:hidden;background:#000;height:220px}
+.card img{width:100%;height:100%;object-fit:cover;display:block}
+.liveBadge{position:absolute;top:8px;left:8px;background:#d32f2f;color:#fff;padding:6px 8px;border-radius:999px;font-weight:800}
+.viewer{position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.9);padding:6px 8px;border-radius:12px;font-weight:700;color:#111}
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:var(--yellow);padding:12px 18px;border-radius:30px;font-weight:800;cursor:pointer}
+.bottomNav{position:fixed;left:0;right:0;bottom:0;height:64px;background:#fff;display:flex;justify-content:space-around;align-items:center;border-top:1px solid #f0f0f0}
+.fullscreen{position:fixed;inset:0;background:#000;display:flex;flex-direction:column;z-index:9999}
+.fulltop{height:56px;display:flex;justify-content:space-between;align-items:center;padding:8px 12px;color:#fff}
+.fullvideo{flex:1;display:flex;align-items:center;justify-content:center;position:relative}
+.fullvideo video{width:100%;height:100%;object-fit:cover}
+.controls{position:absolute;left:12px;bottom:12px;display:flex;gap:8px}
+.chatbtn{position:absolute;right:12px;bottom:12px;background:rgba(0,0,0,0.6);color:#fff;padding:10px 12px;border-radius:999px;border:none}
+.chatPanel{position:fixed;left:0;right:0;bottom:0;height:45%;background:#fff;border-top-left-radius:12px;border-top-right-radius:12px;box-shadow:0 -6px 20px rgba(0,0,0,0.12);transform:translateY(100%);transition:transform .28s}
+.chatPanel.open{transform:translateY(0)}
+.chatMessages{height:calc(100% - 60px);overflow:auto;padding:10px}
+.inputRow{display:flex;gap:8px;padding:8px}
+.inputRow input{flex:1;padding:10px;border-radius:10px;border:1px solid #eee}
+.small{font-size:13px;color:#666}
+@media(max-width:700px){ .grid{grid-template-columns:repeat(2,1fr)} .card{height:180px} }
+</style>
+</head>
+<body>
+<div class="topbar"><div class="logo">TEST LIVE</div><div class="icons"></div></div>
+<div class="container">
+  <div class="grid" id="feed"></div>
+</div>
+<button class="fab" id="goLiveBtn">Go Live</button>
+<div class="bottomNav"><div>🏠</div><div>🔍</div><div>👑</div><div>💬</div><div>👤</div></div>
+
+<div id="fullscreen" class="hidden"></div>
+<div id="chatPanel" class="chatPanel">
+  <div class="chatMessages" id="chatMessages"></div>
+  <div class="inputRow"><input id="chatInput" placeholder="Say something..."><button id="sendChat">Send</button></div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+// render a dummy feed
+const feedEl = document.getElementById('feed');
+for(let i=0;i<8;i++){
+  const card = document.createElement('div'); card.className='card';
+  const img = document.createElement('img'); img.src='https://picsum.photos/seed/'+(i+20)+'/600/400';
+  const live = document.createElement('div'); live.className='liveBadge'; live.innerText='LIVE';
+  const view = document.createElement('div'); view.className='viewer'; view.innerText=(Math.floor(Math.random()*5000)+10)+' viewers';
+  card.appendChild(img); card.appendChild(live); card.appendChild(view);
+  card.onclick = ()=> openViewerMock(i);
+  feedEl.appendChild(card);
+}
+
+function openViewerMock(i){
+  const fs = document.getElementById('fullscreen');
+  fs.innerHTML = `
+    <div class="fullscreen">
+      <div class="fulltop"><div style="font-weight:800">Streamer_${i+1} • LIVE 🔴</div><div><button onclick="closeFull()">✖</button></div></div>
+      <div class="fullvideo"><video autoplay playsinline src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"></video>
+      <div class="controls"><button onclick="toggleChat()" class="chatbtn">💬</button></div></div>
+    </div>
+  `;
+  fs.classList.remove('hidden');
+  document.getElementById('chatPanel').classList.add('open');
+}
+function closeFull(){ document.getElementById('fullscreen').classList.add('hidden'); document.getElementById('chatPanel').classList.remove('open'); }
+
+// Go Live flow: quick inline signup/login then camera fullscreen
+document.getElementById('goLiveBtn').onclick = async ()=>{
+  const token = localStorage.getItem('token');
+  if (!token){
+    const want = confirm('Create account (admin key required for signup)?');
+    if (!want) return;
+    const accessKey = prompt('Admin access key:');
+    const password = prompt('Choose a password (min 4 chars):');
+    const displayName = prompt('Display name (optional):');
+    try{
+      const r = await fetch('/api/signup',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({accessKey,password,displayName})});
+      const j = await r.json();
+      if (j.token){ localStorage.setItem('token', j.token); localStorage.setItem('id', j.id); alert('Created. Your ID: '+j.id); } else { alert(JSON.stringify(j)); return; }
+    }catch(e){ alert('signup failed'); return; }
+  }
+  startBroadcast();
+};
+
+let socket, pc, localStream;
+async function startBroadcast(){
+  try{
+    const token = localStorage.getItem('token');
+    if (!token) return alert('no token');
+    socket = io();
+    socket.on('connect', ()=> socket.emit('auth', token));
+    socket.on('auth-ok', ()=> console.log('auth ok'));
+    socket.on('public-signal', async data=>{
+      if (!pc) return;
+      if (data.sdp){ await pc.setRemoteDescription(new RTCSessionDescription(data.sdp)); if (data.sdp.type==='offer'){ const ans = await pc.createAnswer(); await pc.setLocalDescription(ans); socket.emit('public-signal',{ sdp: pc.localDescription }); } }
+      if (data.candidate){ try{ await pc.addIceCandidate(data.candidate); }catch(e){ console.warn(e); } }
+    });
+    localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+    const fs = document.getElementById('fullscreen');
+    fs.innerHTML = `
+      <div class="fullscreen">
+        <div class="fulltop"><div style="font-weight:800">${localStorage.getItem('displayName')||'Me'} • LIVE 🔴</div><div><button onclick="endBroadcast()">End</button></div></div>
+        <div class="fullvideo"><video id="broad" autoplay playsinline muted></video><div class="controls"><button onclick="toggleChat()" class="chatbtn">💬</button></div></div>
+      </div>
+    `;
+    fs.classList.remove('hidden');
+    document.getElementById('broad').srcObject = localStream;
+    pc = new RTCPeerConnection();
+    localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
+    pc.onicecandidate = e=>{ if (e.candidate) socket.emit('public-signal', { candidate: e.candidate }); };
+    const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+    socket.emit('public-signal', { sdp: pc.localDescription });
+    socket.emit('go-live', { id: localStorage.getItem('id') });
+    // moderation snapshots (send base64 to server)
+    window._modInt = setInterval(async ()=>{
+      try{
+        const canvas = document.createElement('canvas'); canvas.width=160; canvas.height=120;
+        const ctx = canvas.getContext('2d'); ctx.drawImage(document.getElementById('broad'),0,0,160,120);
+        const frame = canvas.toDataURL('image/jpeg').split(',')[1];
+        await fetch('/api/moderate-frame',{ method:'POST', headers:{ 'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('token') }, body: JSON.stringify({ frame }) });
+      }catch(e){ console.warn('mod err', e); }
+    },5000);
+  }catch(e){ alert('camera error '+e.message); }
+}
+
+function endBroadcast(){
+  if (window._modInt) clearInterval(window._modInt);
+  if (localStream) localStream.getTracks().forEach(t=>t.stop());
+  if (pc){ pc.close(); pc=null; }
+  document.getElementById('fullscreen').classList.add('hidden');
+  alert('Broadcast ended');
+  try{ socket.emit('stop-live'); }catch(e){}
+}
+
+// chat
+document.getElementById('sendChat').onclick = ()=>{
+  const txt = document.getElementById('chatInput').value;
+  if (!txt) return;
+  if (!socket) socket = io();
+  socket.emit('public-message', txt);
+  const d = document.createElement('div'); d.className='msg me'; d.innerText = 'You: '+txt; document.getElementById('chatMessages').appendChild(d);
+  document.getElementById('chatInput').value='';
+};
+
+function toggleChat(){ document.getElementById('chatPanel').classList.toggle('open'); }
+</script>
+</body>
+</html>
