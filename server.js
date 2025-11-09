@@ -16,15 +16,21 @@ const io = require('socket.io')(server, { cors: { origin: '*' } });
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'devsecret';
 const ADMIN_KEY = process.env.ADMIN_KEY || 'adminkey';
-const MOD_ENDPOINT = process.env.MODERATION_ENDPOINT || 'https://nsfw-demo.onrender.com/api/moderate';
+const MOD_ENDPOINT =
+  process.env.MODERATION_ENDPOINT || 'https://nsfw-demo.onrender.com/api/moderate';
 
 // ==== MIDDLEWARE ====
 app.use(cors());
 app.use(express.json({ limit: '6mb' }));
-app.use(express.static(path.join(__dirname, 'frontend', 'static'))); // ✅ Fix: correct static dir
+
+// ✅ Serve frontend (fix for "Cannot GET /")
+app.use(express.static(path.join(__dirname, 'frontend')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+});
 
 // ==== IN-MEMORY STORAGE ====
-const users = {}; // id -> { id, passwordHash, displayName }
+const users = {}; // id -> {id, passwordHash, displayName}
 const sockets = {}; // socketId -> userId
 let currentBroadcaster = null;
 const warnings = {}; // userId -> count
@@ -190,5 +196,3 @@ io.on('connection', socket => {
 // ==== START SERVER ====
 // =====================
 server.listen(PORT, () => console.log(`🚀 TestLive backend running on port ${PORT}`));
-
-      
